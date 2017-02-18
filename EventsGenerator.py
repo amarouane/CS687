@@ -1,8 +1,15 @@
 import requests
-import json
+import json, os
+from datetime import datetime
 from shapely.geometry import MultiPolygon
 from shapely.wkt import loads
 from shapely.geometry import mapping
+
+try:
+    from configparser import ConfigParser
+except ImportError:
+    from ConfigParser import ConfigParser
+
 
 class generateEvent():
     """
@@ -10,37 +17,24 @@ class generateEvent():
     and also every metadata that goes with it
     """
 
-    def __init__(self):
-        self.url = "https://ed3test.itsc.uah.edu/eventalbums/restapi/geoalbums/"
-        self.datasetMap=""""{
-            "properties": {
-               "bounding_box": {
-                  "type": "geo_shape"
-               },
-               "name": {
-                  "type": "string"
 
-               },
-               "type": {
-                  "type": "string"
-               },
-               "summary": {
-                  "type": "string",
-                  "index": "not_analyzed"
-               },
-               "link": {
-                  "type": "string",
+    def __init__(self, configFilePath):
+        if not os.access(configFilePath,
+                             os.R_OK):  # check if the config file has the reading permissions set
+            print("[CONFIGFILE ERROR] the config file can't be open for reading/writing ")
+            exit(0)
+        self.config = ConfigParser()
+        self.config.read(configFilePath)
+        self.configFilePath = configFilePath
 
-               },
-               "description": {
-                  "type": "string"
+        self._elasticSearchHost = self.config.get("elasticsearch", "serverurl")
 
-               }
+        self.eventMapping = self.config.get("mapping", "event")
+        self.url=self.config.get("resources", "url")
 
-            }
-         }"""
 
-        print "I was instiated"
+
+
 
 
 
@@ -48,25 +42,96 @@ class generateEvent():
     def getJson(self,id=1070):
         url = self.url+str(id)+".json" #todo check if id is a number and link is working
         re=requests.get(url)
-        return re.json()
+        entriesJsonList=[]
+        if re.ok:
+            dataJson=re.json()
+            eventName=dataJson['name']
+            for ele in dataJson['entries']:
+                entryJson = requests.get(ele)
+                if entryJson.ok:
+                    entriesJsonList.append(entryJson.json())
+
+
+            return {'jsonEntriesList':entriesJsonList, 'eventname':eventName}
+        return False
+
+
 
     def getGeom(self, entry):
+        geom=None
 
         if entry['geompoint']:
             geom=entry['geompoint'].split(';')[1]
         elif entry['geommultipolygon']:
+
             geom = entry['geommultipolygon'].split(';')[1]
-        return geom
 
+        if geom:
+            geom=loads(geom) #todo check if geom defined
+            #bounds creates  a (minx, miny, maxx, maxy) tuple.
+            west,north,east,south=geom.bounds
+            BBXgeom = [[west, north], [east, south]]
 
-    def setEStMapping(self, index, type):
+            return {
+            "type": "envelope",
+            "coordinates":BBXgeom
+        }
+        return None
+
+    def getElasticSearchURL(self, index=None, type=None):
+        if None in [index, type]:
+            return self._elasticSearchHost
+        else:
+            return self._elasticSearchHost + index + "/" + type
+
+    def setDatasetMapping(self, index, type):
         mapp = {"mappings": {
-            type: json.loads(self.datasetMap)
+            type: json.loads(self.eventMapping)
         }
         }
-        url = "http://localhost:9200/"
+        url = self.getElasticSearchURL()
         po = requests.put(url=url + index, json=mapp)
         return po.content
+
+
+
+
+    def populateES(self, jsonDataList, index,type,eventName):
+
+
+        name, eventType, summary, description, link,entryOf = (None, None, None, None, None,None)
+
+        for ele in jsonDataList:
+            entryOf=eventName
+            BBoX=self.getGeom(ele)
+
+            name=ele['name']
+
+            eventType=ele['type']
+            if 'summary' in ele.keys():
+                summary=ele['summary']
+            if 'description' in ele.keys():
+                description=ele['description']
+
+
+
+            link =ele['link']
+            datetime.strptime('Jun 1 2005  1:33PM', '%b %d %Y %I:%M%p')
+            start_date = datetime.strptime(ele['start'], "%Y-%m-%dT%H:%M:%SZ")
+            stop_date = datetime.strptime(ele['stop'], "%Y-%m-%dT%H:%M:%SZ")
+            start_date=start_date.strftime("%Y-%m-%d %H:%M:%S")
+            stop_date=stop_date.strftime("%Y-%m-%d %H:%M:%S")
+
+            dataToIngest={'name':name,'type': eventType,'summary': summary,'description': description,'link': link, 'bounding_box':BBoX,'entryof':entryOf, 'start_date':start_date, 'stop_date':stop_date}
+            url = self.getElasticSearchURL(index=index, type=type)
+            putReq = requests.post(url=url, json=dataToIngest)
+            if putReq.ok == False:
+                print putReq.content
+                return
+
+    def deleteESIndex(self, index):
+        deleteIndex = requests.delete(self._elasticSearchHost + '/' + index )
+        return deleteIndex.content
 
 
 
@@ -75,13 +140,20 @@ class generateEvent():
 
 
 if __name__=="__main__":
-    test=generateEvent()
-    thegm= test.getGeom(test.getJson())
-    geom= loads(thegm)
-    print geom.bounds
-    m = mapping(geom)
-    test.setEStMapping("event","album")
-    print m['type']
+    test=generateEvent(configFilePath="configFile.cfg")
+    #print test.deleteESIndex("event")
+    #print test.setDatasetMapping(index="event", type='album')
+    eventName, entriesList=test.getJson(id=1007).values()
+
+
+    test.populateES(entriesList,index='event',type='album',eventName=eventName)
+
+    #print test.getJson()
+
+
+
+
+    #rint m['type']
     #poly=MultiPolygon(test.getJson()['geommultipolygon'])
     #x= test.getAtomFeed("MEGSVR.1605010313")
 
