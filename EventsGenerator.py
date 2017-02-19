@@ -46,6 +46,8 @@ class generateEvent():
         if re.ok:
             dataJson=re.json()
             eventName=dataJson['name']
+            if dataJson['type'] in ['Forcasts', 'Earthquake']:
+                return {'jsonEntriesList':False, 'eventname':False}
             for ele in dataJson['entries']:
                 entryJson = requests.get(ele)
                 if entryJson.ok:
@@ -53,7 +55,7 @@ class generateEvent():
 
 
             return {'jsonEntriesList':entriesJsonList, 'eventname':eventName}
-        return False
+        return {'jsonEntriesList':False, 'eventname':False}
 
 
 
@@ -94,20 +96,41 @@ class generateEvent():
         return po.content
 
 
+    def getEventType(self, eventName):
+        nameMap={'TOR':"Tornado", 'SVR': "Severe Thunder Storm", 'FFL': 'Flash Flood', 'SMW': "Spetial Marine"}
+        for ele in nameMap.keys():
+            if ele in eventName:
+                return nameMap[ele]
+        return None
+    def getEntryType(self, link):
+        nameMap = {'youtube': "Youtube", 'flickr': "Flickr", 'exportKML': 'KML', 'outlook': "Forcast", 'reports': 'Damage Report', 'twitter': 'Tweet'}
+        for ele in nameMap.keys():
+            if ele in link:
+             return nameMap[ele]
+        return None
 
 
     def populateES(self, jsonDataList, index,type,eventName):
 
 
-        name, eventType, summary, description, link,entryOf = (None, None, None, None, None,None)
+        entryOf = eventName
+
+        eventType=self.getEventType(eventName)
+
+
+
+        name, summary, description, link = (None, None, None, None)
 
         for ele in jsonDataList:
-            entryOf=eventName
+
+
             BBoX=self.getGeom(ele)
 
             name=ele['name']
 
-            eventType=ele['type']
+            entryType=self.getEntryType(ele['link'])
+            
+
             if 'summary' in ele.keys():
                 summary=ele['summary']
             if 'description' in ele.keys():
@@ -122,7 +145,7 @@ class generateEvent():
             start_date=start_date.strftime("%Y-%m-%d %H:%M:%S")
             stop_date=stop_date.strftime("%Y-%m-%d %H:%M:%S")
 
-            dataToIngest={'name':name,'type': eventType,'summary': summary,'description': description,'link': link, 'bounding_box':BBoX,'entryof':entryOf, 'start_date':start_date, 'stop_date':stop_date}
+            dataToIngest={'name':name,'event_type': eventType, 'entry_type': entryType, 'summary': summary,'description': description,'link': link, 'bounding_box':BBoX,'entryof':entryOf, 'start_date':start_date, 'stop_date':stop_date}
             url = self.getElasticSearchURL(index=index, type=type)
             putReq = requests.post(url=url, json=dataToIngest)
             if putReq.ok == False:
@@ -143,10 +166,11 @@ if __name__=="__main__":
     test=generateEvent(configFilePath="configFile.cfg")
     #print test.deleteESIndex("event")
     #print test.setDatasetMapping(index="event", type='album')
-    eventName, entriesList=test.getJson(id=1007).values()
+    for i in range(1000,1050):
+        eventName, entriesList=test.getJson(id=i).values()
 
-
-    test.populateES(entriesList,index='event',type='album',eventName=eventName)
+        if entriesList:
+            test.populateES(entriesList,index='event',type='album',eventName=eventName)
 
     #print test.getJson()
 
