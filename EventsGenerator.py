@@ -46,6 +46,7 @@ class generateEvent():
         if re.ok:
             dataJson=re.json()
             eventName=dataJson['name']
+
             if dataJson['type'] in ['Forcasts', 'Earthquake']:
                 return {'jsonEntriesList':False, 'eventname':False}
             for ele in dataJson['entries']:
@@ -80,11 +81,11 @@ class generateEvent():
         }
         return None
 
-    def getElasticSearchURL(self, index=None, type=None):
-        if None in [index, type]:
+    def getElasticSearchURL(self, index=None, type=None, id=None):
+        if None in [index, type, id]:
             return self._elasticSearchHost
         else:
-            return self._elasticSearchHost + index + "/" + type
+            return self._elasticSearchHost + index + "/" + type+"/" + id
 
     def setDatasetMapping(self, index, type):
         mapp = {"mappings": {
@@ -97,7 +98,7 @@ class generateEvent():
 
 
     def getEventType(self, eventName):
-        nameMap={'TOR':"Tornado", 'SVR': "Severe Thunder Storm", 'FFL': 'Flash Flood', 'SMW': "Spetial Marine"}
+        nameMap={'TOR':"Tornado", 'SVR': "Severe Thunder Storm", 'FFL': 'Flash Flood', 'SMW': "Special Marine Warning"}
         for ele in nameMap.keys():
             if ele in eventName:
                 return nameMap[ele]
@@ -108,49 +109,94 @@ class generateEvent():
             if ele in link:
              return nameMap[ele]
         return None
+    def getDate(self,stringToDate, eventName=None):
+        """
+
+        :param stringToDate:
+        :param eventName:
+        :return:
+        """
+        if stringToDate:
+
+            stringToDate = datetime.strptime(stringToDate, "%Y-%m-%dT%H:%M:%SZ")
+            return  stringToDate.strftime("%Y-%m-%d %H:%M:%S")
+        elif eventName:
+            stringToDate="20"+eventName.split(".")[1]
+            stringToDate = datetime.strptime(stringToDate, "%Y%m%d%H%M%S")
+            return stringToDate.strftime("%Y-%m-%d %H:%M:%S")
+
+
+
 
 
     def populateES(self, jsonDataList, index,type,eventName):
 
 
-        entryOf = eventName
+
 
         eventType=self.getEventType(eventName)
+        if not eventType:
+            return
+        event_summary = None
+
+        event_description = None
+        event_link = None
+        event_start_date = None
+        event_stop_date = None
+
+        event_BBoX = None
 
 
 
-        name, summary, description, link = (None, None, None, None)
+
+        entries=[]
+        entryTypes=[]
 
         for ele in jsonDataList:
 
-
-            BBoX=self.getGeom(ele)
-
-            name=ele['name']
-
-            entryType=self.getEntryType(ele['link'])
-            
-
+            summary, description, link = (None, None, None)
             if 'summary' in ele.keys():
-                summary=ele['summary']
+                summary = ele['summary']
             if 'description' in ele.keys():
-                description=ele['description']
+                description = ele['description']
+            link = ele['link']
+
+            start_date = self.getDate(stringToDate=ele['start'], eventName=eventName)
+            if start_date == None:
+                print eventName
+            stop_date = self.getDate(stringToDate=ele['stop'], eventName=eventName)
+
+            BBoX = self.getGeom(ele)
+            entryType=self.getEntryType(link)
+            if entryType :
+                entryTypes.append(entryType)
+            if ele['name']in [eventName, "EventInfo"] :
+
+                event_summary = summary
+
+                event_description = ele['description']
+                event_link = link
+
+                event_start_date = start_date
+                event_stop_date = stop_date
+
+                event_BBoX=BBoX
+            else:
+
+                entries.append({'name':ele['name'], 'entryType':self.getEntryType(ele['link']),'link':link, 'start_date':start_date, 'stop_date': stop_date, 'bounding_box':BBoX, 'summary':summary, 'description':description })
 
 
 
-            link =ele['link']
-            datetime.strptime('Jun 1 2005  1:33PM', '%b %d %Y %I:%M%p')
-            start_date = datetime.strptime(ele['start'], "%Y-%m-%dT%H:%M:%SZ")
-            stop_date = datetime.strptime(ele['stop'], "%Y-%m-%dT%H:%M:%SZ")
-            start_date=start_date.strftime("%Y-%m-%d %H:%M:%S")
-            stop_date=stop_date.strftime("%Y-%m-%d %H:%M:%S")
 
-            dataToIngest={'name':name,'event_type': eventType, 'entry_type': entryType, 'summary': summary,'description': description,'link': link, 'bounding_box':BBoX,'entryof':entryOf, 'start_date':start_date, 'stop_date':stop_date}
-            url = self.getElasticSearchURL(index=index, type=type)
-            putReq = requests.post(url=url, json=dataToIngest)
-            if putReq.ok == False:
-                print putReq.content
-                return
+
+
+
+        dataToIngest={'name':eventName,'event_type': eventType, 'entries': entries,'entry_types':list(set(entryTypes)), 'summary': event_summary,'description': event_description,'link': event_link, 'bounding_box':event_BBoX, 'start_date':event_start_date, 'stop_date':event_stop_date}
+        url = self.getElasticSearchURL(index=index, type=type, id=eventName)
+        putReq = requests.post(url=url, json=dataToIngest)
+        if putReq.ok == False:
+            print putReq.content
+            return
 
     def deleteESIndex(self, index):
         deleteIndex = requests.delete(self._elasticSearchHost + '/' + index )
@@ -164,11 +210,11 @@ class generateEvent():
 
 if __name__=="__main__":
     test=generateEvent(configFilePath="configFile.cfg")
-    #print test.deleteESIndex("event")
-    #print test.setDatasetMapping(index="event", type='album')
+    print test.deleteESIndex("event")
+    print test.setDatasetMapping(index="event", type='album')
+    #print test.getJson(id=1070).values()
     for i in range(1000,1050):
         eventName, entriesList=test.getJson(id=i).values()
-
         if entriesList:
             test.populateES(entriesList,index='event',type='album',eventName=eventName)
 
