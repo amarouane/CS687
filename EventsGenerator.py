@@ -4,7 +4,7 @@ from datetime import datetime
 from shapely.geometry import MultiPolygon
 from shapely.wkt import loads
 from shapely.geometry import mapping
-
+from multiprocessing import Process
 try:
     from configparser import ConfigParser
 except ImportError:
@@ -205,7 +205,7 @@ class generateEvent():
             if entryType :
                 entryTypes.append(entryType)
 
-            if eventType=='Earthquake' :
+            if eventType=='Earthquake' or ele['name']=='EventInfo'  :
 
                 event_summary = summary
 
@@ -259,9 +259,16 @@ if __name__=="__main__":
     #print test.getJson(id=1070).values()
     #eventName, entriesList = test.getJsonEarthquake(id=1100).values()
     #print entriesList
+    p1 = Process(target=test.ingestEarthquakes,args=(1000,5000))
+    p1.start()
+    p2 = Process(target=test.ingestSeverWeather,args=(1000,5000))
+    p2.start()
+    p1.join()
+    p2.join()
+
 
     #test.ingestEarthquakes(i_start=1099, i_ends=1101)
-    test.ingestSeverWeather(i_start=1060, i_ends=1090)
+    #test.ingestSeverWeather(i_start=1060, i_ends=1090)
     # for i in range(1099,4200):
     #     eventName, entriesList=test.getJson(id=i).values()
     #     if entriesList:
