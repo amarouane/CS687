@@ -37,7 +37,34 @@ class generateEvent():
 
 
 
+    def getJsonEarthquake(self,id=1070):
+        url = self.url+str(id)+".json" #todo check if id is a number and link is working
+        re=requests.get(url)
+        entriesJsonList=[]
+        if re.ok:
+            dataJson=re.json()
+            eventName=dataJson['name']
+            eventName = eventName.split('(')
+            magniude=0
+            if dataJson['type']!= 'Earthquake':
+                return {'jsonEntriesList':False, 'eventname':False}
+            try :
+                magniude = float(eventName[0].split('-')[0].replace('M ', ''))
+                eventName = eventName[1]
 
+            except:
+                eventName = eventName[0]
+
+            if magniude < 3:
+                return {'jsonEntriesList':False, 'eventname':False}
+            for ele in dataJson['entries']:
+                entryJson = requests.get(ele)
+                if entryJson.ok:
+                    entriesJsonList.append(entryJson.json())
+
+
+            return {'jsonEntriesList':entriesJsonList, 'eventname':eventName}
+        return {'jsonEntriesList':False, 'eventname':False}
 
     def getJson(self,id=1070):
         url = self.url+str(id)+".json" #todo check if id is a number and link is working
@@ -47,7 +74,8 @@ class generateEvent():
             dataJson=re.json()
             eventName=dataJson['name']
 
-            if dataJson['type'] in ['Forcasts', 'Earthquake']:
+
+            if dataJson['type'] in ['Forcasts','Earthquake']:
                 return {'jsonEntriesList':False, 'eventname':False}
             for ele in dataJson['entries']:
                 entryJson = requests.get(ele)
@@ -100,8 +128,10 @@ class generateEvent():
     def getEventType(self, eventName):
         nameMap={'TOR':"Tornado", 'SVR': "Severe Thunder Storm", 'FFL': 'Flash Flood', 'SMW': "Special Marine Warning"}
         for ele in nameMap.keys():
-            if ele in eventName:
+            if ele in eventName  :
                 return nameMap[ele]
+            if ')' in eventName:
+                return "Earthquake"
         return None
     def getEntryType(self, link):
         nameMap = {'youtube': "Youtube", 'flickr': "Flickr", 'exportKML': 'KML', 'outlook': "Forcast", 'reports': 'Damage Report', 'twitter': 'Tweet'}
@@ -159,7 +189,11 @@ class generateEvent():
                 summary = ele['summary']
             if 'description' in ele.keys():
                 description = ele['description']
+            if 'realtime product' in description:
+                continue
             link = ele['link']
+            if 'realtime product' in description:
+                continue
 
             start_date = self.getDate(stringToDate=ele['start'], eventName=eventName)
             if start_date == None:
@@ -170,7 +204,8 @@ class generateEvent():
             entryType=self.getEntryType(link)
             if entryType :
                 entryTypes.append(entryType)
-            if ele['name']in [eventName, "EventInfo"] :
+
+            if (ele['name']in [eventName, "EventInfo"]) or (entryType=='Earthquake') :
 
                 event_summary = summary
 
@@ -204,19 +239,30 @@ class generateEvent():
 
 
 
+    def  ingestEarthquakes(self, i_start, i_ends):
+        for i in range(i_start, i_ends):
+            eventName, entriesList = test.getJsonEarthquake(id=i).values()
+            if entriesList:
+                test.populateES(entriesList, index='event', type='album', eventName=eventName)
 
 
 
 
 if __name__=="__main__":
     test=generateEvent(configFilePath="configFile.cfg")
-    print test.deleteESIndex("event")
-    print test.setDatasetMapping(index="event", type='album')
+    #print test.deleteESIndex("event")
+    #print test.setDatasetMapping(index="event", type='album')
     #print test.getJson(id=1070).values()
-    for i in range(1000,1050):
-        eventName, entriesList=test.getJson(id=i).values()
-        if entriesList:
-            test.populateES(entriesList,index='event',type='album',eventName=eventName)
+    #eventName, entriesList = test.getJsonEarthquake(id=1100).values()
+    #print entriesList
+
+    test.ingestEarthquakes(i_start=1099, i_ends=1101)
+    # for i in range(1099,4200):
+    #     eventName, entriesList=test.getJson(id=i).values()
+    #     if entriesList:
+    #         #print entriesList
+    #
+    #         test.populateES(entriesList,index='event',type='album',eventName=eventName)
 
     #print test.getJson()
 
