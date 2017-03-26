@@ -55,7 +55,7 @@ class generateEvent():
             except:
                 eventName = eventName[0]
 
-            if magniude < 3:
+            if magniude < 6:
                 return {'jsonEntriesList':False, 'eventname':False}
             for ele in dataJson['entries']:
                 entryJson = requests.get(ele)
@@ -205,7 +205,7 @@ class generateEvent():
             if entryType :
                 entryTypes.append(entryType)
 
-            if (ele['name']in [eventName, "EventInfo"]) or (entryType=='Earthquake') :
+            if eventType=='Earthquake' :
 
                 event_summary = summary
 
@@ -246,7 +246,11 @@ class generateEvent():
                 test.populateES(entriesList, index='event', type='album', eventName=eventName)
 
 
-
+    def ingestSeverWeather(self, i_start, i_ends):
+        for i in range(i_start, i_ends):
+            eventName, entriesList = test.getJson(id=i).values()
+            if entriesList:
+                test.populateES(entriesList, index='event', type='album', eventName=eventName)
 
 if __name__=="__main__":
     test=generateEvent(configFilePath="configFile.cfg")
@@ -256,7 +260,8 @@ if __name__=="__main__":
     #eventName, entriesList = test.getJsonEarthquake(id=1100).values()
     #print entriesList
 
-    test.ingestEarthquakes(i_start=1099, i_ends=1101)
+    #test.ingestEarthquakes(i_start=1099, i_ends=1101)
+    test.ingestSeverWeather(i_start=1060, i_ends=1090)
     # for i in range(1099,4200):
     #     eventName, entriesList=test.getJson(id=i).values()
     #     if entriesList:
