@@ -205,7 +205,7 @@ class generateEvent():
             if entryType :
                 entryTypes.append(entryType)
 
-            if eventType=='Earthquake' or ele['name']=='EventInfo'  :
+            if eventType =="Earthquake" or ele['type']== "EventInfo"  :
 
                 event_summary = summary
 
@@ -259,11 +259,11 @@ if __name__=="__main__":
     #print test.getJson(id=1070).values()
     #eventName, entriesList = test.getJsonEarthquake(id=1100).values()
     #print entriesList
-    p1 = Process(target=test.ingestEarthquakes,args=(1000,5000))
-    p1.start()
-    p2 = Process(target=test.ingestSeverWeather,args=(1000,5000))
+    #p1 = Process(target=test.ingestEarthquakes,args=(1000,5000))
+    #p1.start()
+    p2 = Process(target=test.ingestSeverWeather,args=(1532,1533))
     p2.start()
-    p1.join()
+    #p1.join()
     p2.join()
 
 
