@@ -9,7 +9,7 @@ class TestpyGHRCCatalogueModules(unittest.TestCase):
 
     def test_ghrc_configFile(self):
         
-        self.assertTrue(1==1)
+        self.assertTrue(1==2)
     def test_number_2(self):
         A=1
         B=3
