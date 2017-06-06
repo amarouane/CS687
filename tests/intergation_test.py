@@ -13,4 +13,4 @@ class TestpyGHRCCatalogueModules(unittest.TestCase):
     def test_number_2(self):
         A=1
         B=3
-        self.assertEqual(A+B,4)
+        self.assertEqual(A+B,5)
